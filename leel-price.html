@@ -399,14 +399,14 @@ ul.pl b{color:var(--mist);font-weight:600}
         <p class="hint">한 줄에 품목명과 금액이 함께 있으면 됩니다. 총 공급금액(부가세 포함) 열을 붙여넣으세요.</p>
       </div>
       <div class="presets">
-        <div class="plabel">기록 보관</div>
+        <div class="plabel">백업 (폰 바꿀 때)</div>
         <div class="pasterow">
-          <button class="optadd" id="cfgSave">내보내기</button>
+          <button class="optadd primary" id="cfgSave">백업 파일 내보내기</button>
           <button class="optadd" id="cfgLoad">불러오기</button>
           <span class="msg" id="cfgMsg"></span>
         </div>
         <input type="file" id="cfgFile" accept=".json,application/json" hidden>
-        <p class="hint">옵션·부수비용·실거래(추가·수정·삭제한 내용 포함)까지 파일로 저장해 두었다가 다음에 불러오면 그대로 복원됩니다.</p>
+        <p class="hint">이 기기·브라우저에는 옵션·부수비용·실거래(추가·수정·삭제 포함)가 자동으로 저장됩니다. 다만 그건 이 브라우저 안에서만 유효해서, 폰을 바꾸거나 브라우저를 바꾸면 넘어가지 않습니다. 새 폰으로 옮기실 땐 여기서 내보내기 한 파일을(에어드롭·카톡 등으로) 새 폰에 전달한 뒤 그 파일로 불러오기 하세요.</p>
       </div>
     </div>
   </details>
@@ -600,6 +600,27 @@ function eok(m){                       // m: 백만원
 }
 function eokSigned(m){ return (m<0?'-':'+') + eok(Math.abs(m)); }
 
+/* ══════ 이 브라우저에 자동 저장 (폰 안에서 새로고침해도 유지) ══════ */
+// 폰을 바꿀 때는 이걸론 안 되고, "기록 보관 → 내보내기/불러오기" 파일로 옮겨야 합니다.
+const LS_KEY = 'leel-price-v1';
+function saveLocal(){
+  try{
+    localStorage.setItem(LS_KEY, JSON.stringify({opts:OPTS, costs:COSTS, all:OPT_ALL, deals:DEALS_BY_EXC}));
+  }catch(e){ /* 저장 불가 환경(시크릿 모드 등)이면 조용히 넘어감 */ }
+}
+function loadLocal(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return false;
+    const d = JSON.parse(raw);
+    if(Array.isArray(d.opts))  OPTS = d.opts;
+    if(Array.isArray(d.costs)) COSTS = d.costs;
+    if(typeof d.all==='boolean') OPT_ALL = d.all;
+    if(d.deals && typeof d.deals==='object') DEALS_BY_EXC = d.deals;
+    return true;
+  }catch(e){ return false; }
+}
+
 document.querySelectorAll('nav button').forEach(b=>{
   b.addEventListener('click',()=>{
     document.querySelectorAll('nav button').forEach(x=>x.setAttribute('aria-selected', x===b));
@@ -714,6 +735,7 @@ function renderOpts(){
     ? '기록된 금액은 '+[...new Set(tagged.map(o=>o.py))].join('·')+'평 계약서 기준입니다.'
     : '';
   renderPresets();
+  saveLocal();
 }
 function esc(t){ return String(t==null?'':t).replace(/"/g,'&quot;'); }
 
@@ -816,6 +838,7 @@ function renderCosts(){
   $('#costNote').textContent = COST_BASE
     ? '과세표준 '+won(COST_BASE)+'원 기준. 금액칸은 직접 고칠 수 있고, 고친 값은 ↻(자동 기입)를 누르기 전까지 그대로 유지됩니다. ↻를 누르면 현재 요율로 다시 계산해 채웁니다. 인지세 요율칸은 분담 비율(계약 당사자 절반 부담이면 50)입니다.'
     : '동호수를 조회하면 과세표준이 잡히고 자동 항목이 채워집니다.';
+  saveLocal();
 }
 $('#costRows').addEventListener('input', e=>{
   const el=e.target, i=+el.dataset.i;
@@ -1270,6 +1293,7 @@ function renderDeals(){
     $('#dealStatNote').textContent = '이 전용면적은 아직 반영된 실거래가 없습니다. 위 "+ 실거래 추가"로 넣어 보세요.';
     $('#dealCards').innerHTML='';
     $('#dealChart').innerHTML='';
+    saveLocal();
     return;
   }
 
@@ -1319,6 +1343,7 @@ function renderDeals(){
   }).join('');
 
   drawDealChart(rs);
+  saveLocal();
 }
 
 function drawDealChart(rs){
@@ -1632,6 +1657,15 @@ renderDeals();
     + '공고문 표지의 총 세대수 2,070세대와 차이가 있어, 층별로 실제 배정되지 않은 라인이 있을 수 있습니다. '
     + '정확한 주택형별 세대수는 공고문의 공급세대수 표로 확인하세요.';
 })();
+
+/* ══════ 저장된 내용 복원 (이 브라우저에 자동 저장된 게 있으면) ══════ */
+if(loadLocal()){
+  $('#optAll').checked = OPT_ALL;
+  renderOpts();
+  renderCosts();
+  renderAddExcOptions();
+  renderDeals();
+}
 
 /* ══════ 기본 조회: 103동 2406호 ══════ */
 $('#dong').value = '103';
